@@ -2,3 +2,5 @@ discord.py
 aiofiles
 python-dateutil
 pytz
+flask
+gunicorn
