@@ -6,20 +6,35 @@ import os
 from datetime import datetime, timedelta
 from dateutil import parser
 import pytz
+from flask import Flask
+from threading import Thread
+
+# Flask dummy web server to keep Render free tier awake
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is alive!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
+
+# Start Flask in background thread
+Thread(target=run_flask).start()
+
+# Load environment variables (set in Render dashboard)
+TOKEN = os.getenv("TOKEN")
+if not TOKEN:
+    raise ValueError("TOKEN environment variable not set!")
+
+GUILD_ID = int(os.getenv("GUILD_ID"))
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+PING_ROLE_ID = int(os.getenv("PING_ROLE_ID"))
+DEED_DURATION_HOURS = int(os.getenv("DEED_DURATION_HOURS", 168))
 
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
-
-# Load config
-with open('config.json', 'r') as f:
-    config = json.load(f)
-
-TOKEN = config['TOKEN']
-GUILD_ID = config['GUILD_ID']
-CHANNEL_ID = config['CHANNEL_ID']
-PING_ROLE_ID = config['PING_ROLE_ID']
-DEED_DURATION_HOURS = config['DEED_DURATION_HOURS']
 
 DATA_FILE = 'holdings.json'
 holdings = {}  # {holding_name: expiration_iso}
@@ -87,13 +102,12 @@ async def check_expirations():
     for holding, exp_iso in list(holdings.items()):
         exp = parser.parse(exp_iso)
         delta = exp - now
-        if 0 < delta.total_seconds() <= 3600:  # 1h
+        if 0 < delta.total_seconds() <= 3600:  # <1h
             embed = discord.Embed(title="🚨 DEED EXPIRING SOON", description=f"{holding} expires in <1h! Renew NOW!", color=0xff0000)
             await channel.send(f"{role.mention if role else '@leaders'}", embed=embed)
-            # Optional: del holdings[holding] if expired  # Auto-remove expired?
-        elif 6 * 3600 < delta.total_seconds() <= 24 * 3600:  # 6-24h (warn once)
+        elif 6 * 3600 < delta.total_seconds() <= 24 * 3600:  # 6-24h
             embed = discord.Embed(title="⚠️ Deed Warning", description=f"{holding} expires in {str(delta).split('.')[0]}", color=0xffff00)
             await channel.send(embed=embed)
-            # Mark as warned to avoid spam (add a 'warned' flag in data if needed)
 
+# Run the bot
 bot.run(TOKEN)
