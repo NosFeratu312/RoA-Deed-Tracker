@@ -46,6 +46,8 @@ async def load_data():
         async with aiofiles.open(DATA_FILE, 'r') as f:
             data = await f.read()
             holdings = json.loads(data) if data else {}
+    else:
+        holdings = {}
 
 # Sla holdings data op
 async def save_data():
@@ -126,12 +128,29 @@ async def clearall(ctx):
     if ctx.channel.id != CHANNEL_ID:
         return
 
-    if holdings:
-        holdings.clear()
-        await save_data()
-        await ctx.send("🧹 Alle holdings zijn verwijderd uit de tracker.")
+    holdings.clear()
+    await save_data()
+    # Forceer herladen om zeker te zijn
+    await load_data()
+    if not holdings:
+        await ctx.send("🧹 Alle holdings zijn verwijderd uit de tracker. Lijst is nu leeg!")
     else:
-        await ctx.send("De lijst was al leeg.")
+        await ctx.send("⚠️ Lijst is gewist, maar er lijkt nog iets achtergebleven. Probeer !fix of herstart de service in Render.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def fix(ctx):
+    """
+    !fix
+    Forceer de lijst leeg te maken (noodgeval als clearall niet alles wist)
+    """
+    if ctx.channel.id != CHANNEL_ID:
+        return
+
+    holdings.clear()
+    await save_data()
+    await load_data()
+    await ctx.send("Forceer-fix uitgevoerd: lijst is nu leeg.")
 
 @bot.command()
 async def status(ctx, *, holding: str = None):
@@ -150,10 +169,11 @@ async def status(ctx, *, holding: str = None):
     else:
         if not holdings:
             embed.description = "Geen holdings actief op dit moment."
-        for h, exp_iso in holdings.items():
-            exp = parser.parse(exp_iso)
-            delta = exp - datetime.now(pytz.UTC)
-            embed.add_field(name=h, value=f"{str(delta).split('.')[0]}", inline=False)
+        else:
+            for h, exp_iso in holdings.items():
+                exp = parser.parse(exp_iso)
+                delta = exp - datetime.now(pytz.UTC)
+                embed.add_field(name=h, value=f"{str(delta).split('.')[0]}", inline=False)
     await ctx.send(embed=embed)
 
 @tasks.loop(hours=1)
