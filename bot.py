@@ -9,7 +9,7 @@ import pytz
 from flask import Flask
 from threading import Thread
 
-# Flask dummy web server to keep Render free tier awake
+# Flask dummy web server om Render free tier wakker te houden
 app = Flask(__name__)
 
 @app.route('/')
@@ -19,10 +19,10 @@ def home():
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
-# Start Flask in background thread
+# Start Flask in een background thread
 Thread(target=run_flask).start()
 
-# Load environment variables (set in Render dashboard)
+# Laad environment variables (ingesteld in Render dashboard)
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     raise ValueError("TOKEN environment variable not set!")
@@ -39,7 +39,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 DATA_FILE = 'holdings.json'
 holdings = {}  # {holding_name: expiration_iso}
 
-# Load holdings data
+# Laad holdings data
 async def load_data():
     global holdings
     if os.path.exists(DATA_FILE):
@@ -47,7 +47,7 @@ async def load_data():
             data = await f.read()
             holdings = json.loads(data) if data else {}
 
-# Save holdings data
+# Sla holdings data op
 async def save_data():
     async with aiofiles.open(DATA_FILE, 'w') as f:
         await f.write(json.dumps(holdings, indent=2))
@@ -59,15 +59,42 @@ async def on_ready():
     check_expirations.start()
 
 @bot.command()
-@commands.has_permissions(administrator=True)  # Restrict to admins
-async def renew(ctx, *, holding: str):
+@commands.has_permissions(administrator=True)  # Beperk tot admins / officers
+async def renew(ctx, holding: str, days: int = 7, hours: int = 0, minutes: int = 0):
+    """
+    !renew <holding> [dagen] [uren] [minuten]
+    Voorbeelden:
+    !renew Avalon                     → standaard 7 dagen
+    !renew Avalon 6                   → 6 dagen
+    !renew Hammerhold 7 4             → 7 dagen + 4 uur
+    !renew Granitevein 7 23 15        → 7 dagen + 23 uur + 15 minuten
+    """
     if ctx.channel.id != CHANNEL_ID:
         return
-    exp_time = datetime.now(pytz.UTC) + timedelta(hours=DEED_DURATION_HOURS)
-    holdings[holding.upper()] = exp_time.isoformat()
+
+    if days < 0 or hours < 0 or minutes < 0:
+        await ctx.send("❌ Getallen mogen niet negatief zijn.")
+        return
+
+    total_seconds = days * 86400 + hours * 3600 + minutes * 60
+
+    if total_seconds < 3600:  # minimaal 1 uur
+        await ctx.send("❌ Minimaal 1 uur countdown aub.")
+        return
+
+    exp_time = datetime.now(pytz.UTC) + timedelta(seconds=total_seconds)
+
+    h = holding.upper()
+    holdings[h] = exp_time.isoformat()
     await save_data()
-    embed = discord.Embed(title="✅ Deed Renewed", color=0x00ff00)
-    embed.add_field(name=holding.upper(), value=f"Expires: <t:{int(exp_time.timestamp())}:F>", inline=False)
+
+    embed = discord.Embed(title="✅ Deed vernieuwd", color=0x00ff00)
+    embed.add_field(
+        name=h,
+        value=f"Verloopt: <t:{int(exp_time.timestamp())}:F> (<t:{int(exp_time.timestamp())}:R>)",
+        inline=False
+    )
+    embed.set_footer(text=f"Ingevoerd: {days} dagen, {hours} uur, {minutes} minuten")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -109,5 +136,5 @@ async def check_expirations():
             embed = discord.Embed(title="⚠️ Deed Warning", description=f"{holding} expires in {str(delta).split('.')[0]}", color=0xffff00)
             await channel.send(embed=embed)
 
-# Run the bot
+# Start de bot
 bot.run(TOKEN)
