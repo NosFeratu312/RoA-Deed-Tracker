@@ -9,7 +9,7 @@ import pytz
 from flask import Flask
 from threading import Thread
 
-# Flask dummy web server om Render free tier wakker te houden
+# Flask dummy web server to keep Render free tier awake
 app = Flask(__name__)
 
 @app.route('/')
@@ -19,10 +19,10 @@ def home():
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
 
-# Start Flask in een background thread
+# Start Flask in background thread
 Thread(target=run_flask).start()
 
-# Laad environment variables (ingesteld in Render dashboard)
+# Load environment variables (set in Render dashboard)
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     raise ValueError("TOKEN environment variable not set!")
@@ -39,7 +39,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 DATA_FILE = 'holdings.json'
 holdings = {}  # {holding_name: expiration_iso}
 
-# Laad holdings data
+# Load holdings data
 async def load_data():
     global holdings
     if os.path.exists(DATA_FILE):
@@ -49,7 +49,7 @@ async def load_data():
     else:
         holdings = {}
 
-# Sla holdings data op
+# Save holdings data
 async def save_data():
     async with aiofiles.open(DATA_FILE, 'w') as f:
         await f.write(json.dumps(holdings, indent=2))
@@ -64,24 +64,24 @@ async def on_ready():
 @commands.has_permissions(administrator=True)
 async def renew(ctx, holding: str, days: int = 7, hours: int = 0, minutes: int = 0):
     """
-    !renew <holding> [dagen] [uren] [minuten]
-    Voorbeelden:
-    !renew Avalon                     → standaard 7 dagen
-    !renew Avalon 6                   → 6 dagen
-    !renew Hammerhold 7 4             → 7 dagen + 4 uur
-    !renew Granitevein 7 23 15        → 7 dagen + 23 uur + 15 minuten
+    !renew <holding> [days] [hours] [minutes]
+    Examples:
+    !renew Avalon                     → default 7 days
+    !renew Avalon 6                   → 6 days
+    !renew Hammerhold 7 4             → 7 days + 4 hours
+    !renew Granitevein 7 23 15        → 7 days + 23 hours + 15 minutes
     """
     if ctx.channel.id != CHANNEL_ID:
         return
 
     if days < 0 or hours < 0 or minutes < 0:
-        await ctx.send("❌ Getallen mogen niet negatief zijn.")
+        await ctx.send("❌ Numbers cannot be negative.")
         return
 
     total_seconds = days * 86400 + hours * 3600 + minutes * 60
 
-    if total_seconds < 3600:  # minimaal 1 uur
-        await ctx.send("❌ Minimaal 1 uur countdown aub.")
+    if total_seconds < 3600:  # min 1 hour
+        await ctx.send("❌ Minimum 1 hour countdown please.")
         return
 
     exp_time = datetime.now(pytz.UTC) + timedelta(seconds=total_seconds)
@@ -90,13 +90,13 @@ async def renew(ctx, holding: str, days: int = 7, hours: int = 0, minutes: int =
     holdings[h] = exp_time.isoformat()
     await save_data()
 
-    embed = discord.Embed(title="✅ Deed vernieuwd", color=0x00ff00)
+    embed = discord.Embed(title="✅ Deed Renewed", color=0x00ff00)
     embed.add_field(
         name=h,
-        value=f"Verloopt: <t:{int(exp_time.timestamp())}:F> (<t:{int(exp_time.timestamp())}:R>)",
+        value=f"Expires: <t:{int(exp_time.timestamp())}:F> (<t:{int(exp_time.timestamp())}:R>)",
         inline=False
     )
-    embed.set_footer(text=f"Ingevoerd: {days} dagen, {hours} uur, {minutes} minuten")
+    embed.set_footer(text=f"Set for: {days} days, {hours} hours, {minutes} minutes")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -104,8 +104,8 @@ async def renew(ctx, holding: str, days: int = 7, hours: int = 0, minutes: int =
 async def remove(ctx, *, holding: str):
     """
     !remove <holding>
-    Verwijdert een holding uit de tracker (bijv. als verlopen of verloren)
-    Voorbeeld: !remove Avalon
+    Removes a holding from the tracker (e.g. if expired or lost)
+    Example: !remove Avalon
     """
     if ctx.channel.id != CHANNEL_ID:
         return
@@ -114,35 +114,35 @@ async def remove(ctx, *, holding: str):
     if h in holdings:
         del holdings[h]
         await save_data()
-        await ctx.send(f"🗑️ **{h}** is verwijderd uit de tracker.")
+        await ctx.send(f"🗑️ **{h}** has been removed from the tracker.")
     else:
-        await ctx.send(f"❌ **{h}** staat niet in de lijst.")
+        await ctx.send(f"❌ **{h}** is not in the list.")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def clearall(ctx):
     """
     !clearall
-    Verwijdert ALLE holdings uit de tracker (noodgeval!)
+    Removes ALL holdings from the tracker (emergency only!)
     """
     if ctx.channel.id != CHANNEL_ID:
         return
 
     holdings.clear()
     await save_data()
-    # Forceer herladen om zeker te zijn
+    # Force reload to confirm
     await load_data()
     if not holdings:
-        await ctx.send("🧹 Alle holdings zijn verwijderd uit de tracker. Lijst is nu leeg!")
+        await ctx.send("🧹 All holdings have been cleared from the tracker. List is now empty!")
     else:
-        await ctx.send("⚠️ Lijst is gewist, maar er lijkt nog iets achtergebleven. Probeer !fix of herstart de service in Render.")
+        await ctx.send("⚠️ List cleared, but something seems to remain. Try !fix or restart the service in Render if it persists.")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def fix(ctx):
     """
     !fix
-    Forceer de lijst leeg te maken (noodgeval als clearall niet alles wist)
+    Force-clear the list (emergency if clearall didn't fully work)
     """
     if ctx.channel.id != CHANNEL_ID:
         return
@@ -150,7 +150,7 @@ async def fix(ctx):
     holdings.clear()
     await save_data()
     await load_data()
-    await ctx.send("Forceer-fix uitgevoerd: lijst is nu leeg.")
+    await ctx.send("Force-fix executed: list is now empty.")
 
 @bot.command()
 async def status(ctx, *, holding: str = None):
@@ -168,7 +168,7 @@ async def status(ctx, *, holding: str = None):
             embed.add_field(name=h, value="❌ No data", inline=False)
     else:
         if not holdings:
-            embed.description = "Geen holdings actief op dit moment."
+            embed.description = "No active holdings at the moment."
         else:
             for h, exp_iso in holdings.items():
                 exp = parser.parse(exp_iso)
@@ -194,5 +194,5 @@ async def check_expirations():
             embed = discord.Embed(title="⚠️ Deed Warning", description=f"{holding} expires in {str(delta).split('.')[0]}", color=0xffff00)
             await channel.send(embed=embed)
 
-# Start de bot
+# Run the bot
 bot.run(TOKEN)
