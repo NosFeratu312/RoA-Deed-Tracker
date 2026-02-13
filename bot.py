@@ -59,7 +59,7 @@ async def on_ready():
     check_expirations.start()
 
 @bot.command()
-@commands.has_permissions(administrator=True)  # Beperk tot admins / officers
+@commands.has_permissions(administrator=True)
 async def renew(ctx, holding: str, days: int = 7, hours: int = 0, minutes: int = 0):
     """
     !renew <holding> [dagen] [uren] [minuten]
@@ -98,6 +98,42 @@ async def renew(ctx, holding: str, days: int = 7, hours: int = 0, minutes: int =
     await ctx.send(embed=embed)
 
 @bot.command()
+@commands.has_permissions(administrator=True)
+async def remove(ctx, *, holding: str):
+    """
+    !remove <holding>
+    Verwijdert een holding uit de tracker (bijv. als verlopen of verloren)
+    Voorbeeld: !remove Avalon
+    """
+    if ctx.channel.id != CHANNEL_ID:
+        return
+
+    h = holding.upper()
+    if h in holdings:
+        del holdings[h]
+        await save_data()
+        await ctx.send(f"🗑️ **{h}** is verwijderd uit de tracker.")
+    else:
+        await ctx.send(f"❌ **{h}** staat niet in de lijst.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def clearall(ctx):
+    """
+    !clearall
+    Verwijdert ALLE holdings uit de tracker (noodgeval!)
+    """
+    if ctx.channel.id != CHANNEL_ID:
+        return
+
+    if holdings:
+        holdings.clear()
+        await save_data()
+        await ctx.send("🧹 Alle holdings zijn verwijderd uit de tracker.")
+    else:
+        await ctx.send("De lijst was al leeg.")
+
+@bot.command()
 async def status(ctx, *, holding: str = None):
     if ctx.channel.id != CHANNEL_ID:
         return
@@ -112,6 +148,8 @@ async def status(ctx, *, holding: str = None):
         else:
             embed.add_field(name=h, value="❌ No data", inline=False)
     else:
+        if not holdings:
+            embed.description = "Geen holdings actief op dit moment."
         for h, exp_iso in holdings.items():
             exp = parser.parse(exp_iso)
             delta = exp - datetime.now(pytz.UTC)
